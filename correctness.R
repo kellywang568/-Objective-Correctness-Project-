@@ -66,6 +66,7 @@ correctCheck_directory <- function(student_dir, solution_file,
   for (i in 1:n) {
     k[[i]] <- correctCheck_file(files[i], solution_file, timeout = timeout, ...)
   }
+  names(k) <- files
   return(k)
 }
 
@@ -83,7 +84,7 @@ correctCheck_directory <- function(student_dir, solution_file,
 #' @export
 correctCheck_file <- function(student_file, solution_file, timeout = 10, ...) {
   # Using wrapper function to get results of solution script
-  x <- eval_file(student_file, timeout = timeout)
+  x <- eval_file(student_file, timeout = timeout, ...)
 
   # If student file had a timeout:
   if (identical(x, 'Timeout!')) {
@@ -132,7 +133,7 @@ correctCheck_object <- function(x, solution_file, timeout = 10, ...) {
   # right.  We've already done eval_file(x) prior to getting here.
 
   # Using wrapper function to get results of solution script
-  s <- eval_file(solution_file, timeout)
+  s <- eval_file(solution_file, timeout, ...)
 
   # Here, both x and s have survived the application of 'eval_file'.
 
@@ -145,9 +146,9 @@ correctCheck_object <- function(x, solution_file, timeout = 10, ...) {
   if (identical(s, 'Code Failure!')) {
     stop('Instructure code failure!')
   }
-
   # Step 1: Check if s is a function, if so, run it on '...' (w. timeoutCatch)
   if (is.function(s)) {
+    
     # Returns the results from the script run on '...'
     sv <- timeoutCatch(s, timeout, ...)
 
@@ -202,16 +203,20 @@ correctCheck_object <- function(x, solution_file, timeout = 10, ...) {
 #' \dontrun{
 #' eval_file('Solution.R', timeout = 10)
 #' }
-eval_file <- function(filename, timeout = 10) {
+eval_file <- function(filename, timeout = 10, ...) {
   # Create a function wrapper around a script
-  mytxt <- c("function() {", "set.seed(1)", readLines(filename, warn = FALSE), 
-             "return(ans) }")
+  mytxt <-  readLines(filename, warn = FALSE)
+  mytxt <- gsub("set.seed\\(*\\d*\\)", "set.seed\\(1\\)", mytxt)
+  mytxt <- gsub("install.packages*", "", mytxt)
+  if (!is.function(eval(parse(text = mytxt)))){
+    mytxt <- c("function() {", "set.seed(1)", mytxt,
+             "return(ans) }")}
   # Set all set.seeds at set.seed(1)
-  mytxt <- gsub("set.seed\\(*\\d*\\)", "set.seed\\(1\\)", mytxt)  # REVISIT
+
   # Create a function
   myfunc <- eval(parse(text = mytxt))
   # Returns the results from the script
-  output <- timeoutCatch(myfunc, timeout)
+  output <- timeoutCatch(myfunc, timeout, ...)
   return(output)
 }
 
@@ -241,15 +246,14 @@ timeoutCatch <- function(func, timeout = 10, ...) {
   return(val)
 }
 
-# Notes:
 
-# Consider: "<<-" and " assign(" [FIXED = TRUE] or "^assign\\(" ======> CRASH
-# Consider adding an option to allow or disallow the use of packages
-# The point here is to be careful of students possibly introducing code with
-# side effects that might add problems.
-
-# Nokkvi Notes:
-
-# Append results to file? CREATE CSV?
+#' Compares student output with solution and provides a score
+#' @param x student object
+#' @param s solution object
+#' @details Used as part of correctCheck_object
+correctTests <- function(x, s){
+  ae <- (all.equal(x, s))
+  return(list(score = as.numeric(isTRUE(ae)), comments = ae))
+}
 
 
