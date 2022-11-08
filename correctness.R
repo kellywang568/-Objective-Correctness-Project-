@@ -64,7 +64,8 @@ correctCheck_directory <- function(student_dir, solution_file,
   k <- vector("list", n)
   # Perform correctCheck on all files to the solution file
   for (i in 1:n) {
-    k[[i]] <- correctCheck_file(files[i], solution_file, timeout = timeout, ...)
+    k[[i]] <- correctCheck_object(files[i], solution_file, 
+                                  timeout = timeout, ...)
   }
   names(k) <- files
   return(k)
@@ -127,70 +128,21 @@ correctCheck_file <- function(student_file, solution_file, timeout = 10, ...) {
 #' correctCheck_object(answer, 'Solution.R', timeout = 10, iris)
 #' }
 #' @export
-correctCheck_object <- function(x, solution_file, timeout = 10, ...) {
-
-  # Again, revisit the choice of _object above, as it doesn't feel quite
-  # right.  We've already done eval_file(x) prior to getting here.
-
+correctCheck_object <- function(submission_file, solution_file, timeout = 10, ...){
   # Using wrapper function to get results of solution script
-  s <- eval_file(solution_file, timeout, ...)
-
-  # Here, both x and s have survived the application of 'eval_file'.
-
-  # Check if s had a timeout, stop if so
-  if (identical(s, 'Timeout!')) {
-    stop('Timeout in solution file; script not able to finish')
+  inputs <- list(...)
+  if (length(inputs) > 0){
+    s <- lapply(inputs, 
+                function(i) return(eval_file(solution_file, timeout,i )))
+    x <- lapply(inputs, 
+                function(i) return(eval_file(submission_file, timeout, i)))
+    return(correctTests(x,s))
+  } else {
+    s <- eval_file(solution_file, timeout)
+    x <- eval_file(submission_file, timeout)
+    ae <- my_allEqual(x,s)
+    return(list(score = as.numeric(ae == TRUE), comments = ae))
   }
-
-  # Check if s had a code failure, stop if so
-  if (identical(s, 'Code Failure!')) {
-    stop('Instructure code failure!')
-  }
-  # Step 1: Check if s is a function, if so, run it on '...' (w. timeoutCatch)
-  if (is.function(s)) {
-    
-    # Returns the results from the script run on '...'
-    sv <- timeoutCatch(s, timeout, ...)
-
-    # Check if sv had a timeout, stop if so
-    if (identical(sv, 'Timeout!')) {
-      stop('Timeout in solution file; function not able to finish')
-    }
-
-    # Check if sv had a code failure, stop if so
-    if (identical(sv, 'Code Failure!')) {
-      stop('Instructure code failure!')
-    }
-
-    # Step 2: Check if x is a function, if so, run it on ... (w. timeoutCatch)
-    if (is.function(x)) {
-      xv <- timeoutCatch(x, timeout, ...)
-    } else {
-      xv <- 'Not a function!'
-    }
-    # Assign back to first values
-    s <- sv
-    x <- xv
-  }
-
-  # Collect timeouts and code failures
-  m <- NA
-  xtimeout <- identical(x, 'Timeout!')
-  xcf <- identical(x, 'Code Failure!')
-  if (identical(x, 'Not a function!')) {
-    xcf <- NA
-    m <- x
-  }
-
-  #### NOTE: SHOULD WE LET INSTRUCTOR KNOW 'Not a function!'?
-
-  # If s is null throw a warning and output
-  if (is.null(s)) warning('Solution script produces NULL as the answer')
-  tests <- correctTests(x,s)
-  return(list(score = tests$score,
-              timeout = xtimeout,
-              codefailure = xcf,
-              message = tests$comments))
 }
 
 #' Eval an R File
@@ -216,7 +168,13 @@ eval_file <- function(filename, timeout = 10, ...) {
   # Create a function
   myfunc <- eval(parse(text = mytxt))
   # Returns the results from the script
-  output <- timeoutCatch(myfunc, timeout, ...)
+  inputs <- list(...)
+  if (length(inputs) > 0){
+    output <- sapply(inputs, 
+                     function(i) return(timeoutCatch(myfunc, timeout, i)))
+  } else {
+    output <- timeoutCatch(myfunc, timeout)
+  }
   return(output)
 }
 
@@ -246,23 +204,20 @@ timeoutCatch <- function(func, timeout = 10, ...) {
   return(val)
 }
 
-#' Compares student output with solution and provides a score
-#' @param x student object
-#' @param s solution object
-#' @details Used as part of correctCheck_object
-correctTests <- function(x, s){
-  ae <- (all.equal(x, s))
-  return(list(score = as.numeric(isTRUE(ae)), comments = ae))
+
+my_allEqual <- function(x,s) {
+  if (identical(x, "Code Failure!")) {
+    return("Code failure!")
+  }
+  else if (identical(x, "Timeout!")) {
+    return("Timeout!")
+  }
+  else return(all.equal(x,s, check.attributes = FALSE))
 }
 
-#' Generates a table that summarizes the amount of correct submissions and
-#' the amount of errors by type.
-#' @param result_list list of lists containing the results for grading each test
-#' case.
-#' @details Used to obtain an overview of the different errors made
-#' by the students. The rows stand for which error is made (or TRUE if no error
-#' has been made). Each column stands for a specific test case. The values in 
-#' each cell is the amount of times that error (or correct answer) has occured 
-#' for a specific test case. 
-result_table <- function(result_list,) {
+correctTests <- function(x, s) {
+  ae <- sapply(1:length(x) , function(i) return(my_allEqual(x[i], s[i])))
+  return(list(score = as.numeric(ae == T), comments = ae))
 }
+
+
