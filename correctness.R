@@ -246,7 +246,6 @@ timeoutCatch <- function(func, timeout = 10, ...) {
   return(val)
 }
 
-
 #' Compares student output with solution and provides a score
 #' @param x student object
 #' @param s solution object
@@ -256,4 +255,14 @@ correctTests <- function(x, s){
   return(list(score = as.numeric(isTRUE(ae)), comments = ae))
 }
 
-
+#' Generates a table that summarizes the amount of correct submissions and
+#' the amount of errors by type.
+#' @param result_list list of lists containing the results for grading each test
+#' case.
+#' @details Used to obtain an overview of the different errors made
+#' by the students. The rows stand for which error is made (or TRUE if no error
+#' has been made). Each column stands for a specific test case. The values in 
+#' each cell is the amount of times that error (or correct answer) has occured 
+#' for a specific test case. 
+result_table <- function(result_list,) {
+}
